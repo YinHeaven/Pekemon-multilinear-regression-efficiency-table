@@ -29,7 +29,6 @@ MAX_SUGGESTIONS = 15 # Aumentar el límite para mostrar más Pokémon por tipo
 # 1   -> Efectividad normal
 # 2   -> Súper efectivo
 # Una tabla completa es muy larga. Este es un subconjunto relevante.
-# Puedes encontrar tablas completas en línea, por ejemplo, https://pokemondb.net/type
 TYPE_EFFECTIVENESS = {
     "normal": {"rock": 0.5, "ghost": 0, "steel": 0.5},
     "fighting": {"normal": 2, "flying": 0.5, "poison": 0.5, "rock": 2, "bug": 0.5, "ghost": 0, "steel": 2, "fire": 1, "water": 1, "grass": 1, "electric": 1, "psychic": 0.5, "ice": 2, "dragon": 1, "dark": 2, "fairy": 0.5},
@@ -114,12 +113,6 @@ def calculate_effectiveness(attacker_types, defender_types):
     if not attacker_types or not defender_types:
         return 1.0 # Efectividad normal si faltan tipos
 
-    # En el juego real, la efectividad de un ataque se determina por el
-    # tipo del ataque contra el(los) tipo(s) del defensor. Si un Pokémon tiene múltiples
-    # tipos, los multiplicadores se multiplican.
-    # Para simplificar en este ejemplo, calcularemos la efectividad
-    # del *primer* tipo del Pokémon atacante contra el(los) tipo(s) del defensor.
-    # Una implementación completa calcularía la efectividad para cada uno de los tipos del atacante.
 
     attacker_primary_type = attacker_types[0]
     calculated_multiplier = 1.0
@@ -197,10 +190,10 @@ class InputBox:
          # Ajustar el ancho si el texto se alarga (opcional)
          # width = max(self.rect.w, self.txt_surface.get_width()+10)
          # self.rect.w = width
-         pass # No se necesita actualización compleja en este ejemplo
+         pass 
 
     def draw(self, screen):
-        # Dibujar la caja
+        #Caja
         pygame.draw.rect(screen, self.color, self.rect, 2) # Borde de 2px
         pygame.draw.rect(screen, INPUT_BG_COLOR, (self.rect.x + 2, self.rect.y + 2, self.rect.width - 4, self.rect.height - 4)) # Fondo blanco
 
@@ -236,51 +229,49 @@ def update_pokemon_suggestions(search_text, all_pokemon_names, valid_types):
     # 2. Buscar por tipo si el texto coincide exactamente con un tipo conocido
     if search_text_lower in valid_types:
          current_success_message = f"Buscando Pokémon de tipo {search_text_lower}..."
-         # Nota: En una aplicación real, querrías manejar esto de forma asíncrona
-         # para no bloquear la UI mientras se espera la respuesta de la API.
-         # Aquí, bloquearemos brevemente para simplificar.
+         # Nota: En una aplicacion real, maneja esto de forma asíncrona
+         # para no bloquear la UI mientras se espera la respuesta de la API. (en pocas palabras si no hay internet no hay respuesta de la api)
+         # Aqui, bloquearemos brevemente para simplificar.
          type_pokemon_names = get_pokemon_by_type(search_text_lower)
          if type_pokemon_names:
              type_suggestions = type_pokemon_names
              current_success_message = f"Sugerencias por tipo {search_text_lower} cargadas."
          else:
              current_error_message = f"No se encontraron Pokémon de tipo {search_text_lower}."
-             current_success_message = "" # Limpiar mensaje de éxito si hubo error al buscar por tipo
+             current_success_message = "" # Limpiar mensaje de exito si hubo error al buscar por tipo
 
 
     # 3. Combinar y limpiar duplicados
     combined_suggestions = list(set(name_suggestions + type_suggestions))
 
-    # 4. Ordenar alfabéticamente
+    # 4. Ordenar alfabeticamente
     combined_suggestions.sort()
 
-    # 5. Limitar el número de sugerencias
+    # 5. Limitar el numero de sugerencias
     suggestions = combined_suggestions[:MAX_SUGGESTIONS]
 
     return suggestions, current_error_message, current_success_message
 
-# --- Función para actualizar las sugerencias de Tipos (para el segundo InputBox) ---
+# --- Funcion para actualizar las sugerencias de Tipos (para el segundo InputBox) ---
 def update_type_suggestions(search_text, valid_types):
     """
     Genera y devuelve una lista de sugerencias de tipos válidos basada en el texto de búsqueda.
     """
     search_text_lower = search_text.lower()
     if search_text_lower:
-        # Buscar tipos que empiecen con el texto de búsqueda
+        # Buscar tipos que empiecen con el texto de busqueda
         suggestions = [type_name for type_name in valid_types if type_name.startswith(search_text_lower)]
         suggestions.sort() # Ordenar alfabéticamente
-        return suggestions[:MAX_SUGGESTIONS] # Limitar el número de sugerencias
+        return suggestions[:MAX_SUGGESTIONS] # Limitar el numero de sugerencias
     else:
-        return [] # No mostrar sugerencias si la caja está vacía
+        return [] # No mostrar sugerencias si la caja está vacia
 
-
-# --- Inicialización de Pygame ---
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Buscador Pokémon y Efectividad de Tipo")
 FONT = pygame.font.Font(None, FONT_SIZE) # Usar fuente predeterminada
 
-# --- Cargar datos ---
+#cargar datos
 print("Cargando lista de Pokémon... esto puede tardar un momento.")
 all_pokemon_names = get_all_pokemon_names()
 if not all_pokemon_names:
@@ -351,7 +342,7 @@ while running:
                             pokemon_input_box.text = name_to_select # Poner el nombre completo en la caja
                             pokemon_suggestions = [] # Limpiar sugerencias después de la selección
                             highlighted_pokemon_suggestion_index = -1 # Resetear índice resaltado
-                            success_message = f"Datos de {selected_pokemon_name} cargados."
+                            success_message = f"Datos de {selected_pokemon_name} cargados!."
                             error_message = ""
                             calculated_effectiveness_multiplier = None # Reiniciar cálculo de efectividad
                             calculated_effectiveness_percentage = None
