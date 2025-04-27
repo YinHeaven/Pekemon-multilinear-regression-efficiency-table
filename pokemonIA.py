@@ -19,7 +19,7 @@ FONT_SIZE = 24
 PADDING = 10
 INPUT_BOX_HEIGHT = 40
 SUGGESTION_HEIGHT = 30
-MAX_SUGGESTIONS = 7 # Limitar el número de sugerencias mostradas
+MAX_SUGGESTIONS = 15 # Aumentar el límite para mostrar más Pokémon por tipo
 
 # --- Tabla de Efectividad de Tipos (Hardcodeada) ---
 # Esto representa el multiplicador de daño del tipo ATACANTE contra el tipo DEFENSOR.
@@ -50,15 +50,20 @@ TYPE_EFFECTIVENESS = {
     "fairy": {"fighting": 2, "poison": 0.5, "steel": 0.5, "fire": 0.5, "dragon": 2, "dark": 2},
     # Añadir entradas para todos los tipos para una tabla completa
 }
+# Lista de nombres de tipos válidos para la búsqueda
+VALID_TYPES = list(TYPE_EFFECTIVENESS.keys())
+
 
 # --- Función para obtener la lista completa de nombres de Pokémon ---
 def get_all_pokemon_names():
     """Obtiene una lista de todos los nombres de Pokémon de la PokeAPI."""
+    print("Obteniendo lista completa de Pokémon...")
     url = f"{POKEAPI_BASE_URL}pokemon?limit=10000" # Usar un límite alto para obtener la mayoría de los Pokémon
     try:
         response = requests.get(url)
         response.raise_for_status() # Lanza una excepción para códigos de error HTTP
         data = response.json()
+        print("Lista de Pokémon obtenida.")
         return [pokemon['name'] for pokemon in data.get('results', [])]
     except requests.exceptions.RequestException as e:
         print(f"Error al obtener la lista de Pokémon: {e}")
@@ -67,6 +72,7 @@ def get_all_pokemon_names():
 # --- Función para obtener los tipos de un Pokémon ---
 def get_pokemon_types(pokemon_name):
     """Obtiene los tipos de un Pokémon específico de la PokeAPI."""
+    print(f"Obteniendo tipos para {pokemon_name}...")
     url = f"{POKEAPI_BASE_URL}pokemon/{pokemon_name.lower()}"
     try:
         response = requests.get(url)
@@ -74,10 +80,29 @@ def get_pokemon_types(pokemon_name):
         data = response.json()
         # Los tipos vienen en una lista con slot y type.name
         types = [t['type']['name'] for t in data.get('types', [])]
+        print(f"Tipos para {pokemon_name}: {types}")
         return types
     except requests.exceptions.RequestException as e:
         print(f"Error al obtener datos de {pokemon_name}: {e}")
         return None
+
+# --- Función para obtener Pokémon por tipo ---
+def get_pokemon_by_type(type_name):
+    """Obtiene una lista de nombres de Pokémon de un tipo específico de la PokeAPI."""
+    print(f"Obteniendo Pokémon de tipo {type_name}...")
+    url = f"{POKEAPI_BASE_URL}type/{type_name.lower()}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        # La lista de Pokémon está en data['pokemon'], cada entrada tiene 'pokemon' -> {'name': '...', 'url': '...'}
+        pokemon_list = [entry['pokemon']['name'] for entry in data.get('pokemon', [])]
+        print(f"Obtenidos {len(pokemon_list)} Pokémon de tipo {type_name}.")
+        return pokemon_list
+    except requests.exceptions.RequestException as e:
+        print(f"Error al obtener Pokémon de tipo {type_name}: {e}")
+        return []
+
 
 # --- Función para calcular la efectividad ---
 def calculate_effectiveness(attacker_types, defender_types):
@@ -208,7 +233,7 @@ print(f"Cargados {len(all_pokemon_names)} nombres de Pokémon.")
 
 # --- Configuración de la UI ---
 pokemon_input_box = InputBox(PADDING, PADDING, 300, INPUT_BOX_HEIGHT)
-pokemon_input_box.set_placeholder("Nombre del Pokémon")
+pokemon_input_box.set_placeholder("Nombre o Tipo de Pokémon") # Actualizado placeholder
 
 target_type_input_box = InputBox(PADDING, PADDING + INPUT_BOX_HEIGHT + PADDING, 200, INPUT_BOX_HEIGHT)
 target_type_input_box.set_placeholder("Tipo del oponente")
@@ -237,10 +262,10 @@ while running:
              # Si se presiona Enter en la caja de Pokémon
             if pokemon_input_box.active and event.key == pygame.K_RETURN:
                 # Intentar seleccionar el texto actual o la primera sugerencia
-                name_to_select = pokemon_input_box.text
+                name_to_select = pokemon_input_box.text.lower() # Usar minúsculas para la búsqueda API
                 if suggestions:
                     # Si hay sugerencias, usar la primera
-                    name_to_select = suggestions[0]
+                    name_to_select = suggestions[0].lower() # Usar minúsculas para la búsqueda API
 
                 if name_to_select:
                      # Intentar obtener datos del Pokémon
@@ -264,7 +289,7 @@ while running:
                         error_message = f"Pokémon '{name_to_select}' no encontrado."
                         success_message = ""
                 else:
-                     error_message = "Introduce un nombre de Pokémon."
+                     error_message = "Introduce un nombre o tipo de Pokémon."
                      success_message = ""
 
             # Si se presiona Enter en la caja de tipo oponente
@@ -291,18 +316,14 @@ while running:
 
 
         # --- Manejar clics en sugerencias (solo cuando la caja de pokemon_input está activa) ---
-        # Esta sección detecta si el clic del ratón cae dentro del área de alguna sugerencia mostrada.
         if event.type == pygame.MOUSEBUTTONDOWN:
-            # Asegurarse de que la caja de entrada de Pokémon está activa y hay sugerencias para hacer clic
             if pokemon_input_box.active and suggestions:
-                # Calcular el área rectangular para cada sugerencia
-                suggestion_rects = [pygame.Rect(pokemon_input_box.rect.x, pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING + i * SUGGESTION_HEIGHT, pokemon_input_box.rect.width, SUGGESTION_HEIGHT) for i in range(len(suggestions))]
-                # Verificar cada rectángulo de sugerencia
+                suggestion_y = pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
+                suggestion_rects = [pygame.Rect(pokemon_input_box.rect.x, suggestion_y + i * SUGGESTION_HEIGHT, pokemon_input_box.rect.width, SUGGESTION_HEIGHT) for i in range(len(suggestions))]
                 for i, rect in enumerate(suggestion_rects):
-                    # Si la posición del clic del ratón está dentro del rectángulo de esta sugerencia
                     if rect.collidepoint(event.pos):
                         # --- Seleccionar esta sugerencia ---
-                        name_to_select = suggestions[i]
+                        name_to_select = suggestions[i].lower() # Usar minúsculas para la búsqueda API
                         error_message = "" # Limpiar errores anteriores
                         success_message = "Buscando Pokémon..."
                         pygame.display.flip() # Actualizar pantalla para mostrar el mensaje "Buscando Pokémon..."
@@ -329,12 +350,39 @@ while running:
     # --- Lógica de Autocompletado ---
     if pokemon_input_box.active and pokemon_input_box.text:
         search_text = pokemon_input_box.text.lower()
-        # Filtrar nombres que empiezan con el texto de búsqueda
-        filtered_names = [name for name in all_pokemon_names if name.startswith(search_text)]
-        # Limitar el número de sugerencias
-        suggestions = filtered_names[:MAX_SUGGESTIONS]
+        # 1. Buscar por nombre
+        name_suggestions = [name for name in all_pokemon_names if name.startswith(search_text)]
+
+        # 2. Buscar por tipo si el texto coincide exactamente con un tipo conocido
+        type_suggestions = []
+        if search_text in VALID_TYPES:
+             # Limpiar mensajes de estado mientras se busca por tipo
+             error_message = ""
+             success_message = f"Buscando Pokémon de tipo {search_text}..."
+             pygame.display.flip() # Actualizar para mostrar el mensaje de buscando por tipo
+             type_pokemon_names = get_pokemon_by_type(search_text)
+             if type_pokemon_names:
+                 type_suggestions = type_pokemon_names
+                 success_message = f"Sugerencias por tipo {search_text} cargadas."
+             else:
+                 error_message = f"No se encontraron Pokémon de tipo {search_text}."
+                 success_message = "" # Limpiar mensaje de éxito si hubo error al buscar por tipo
+
+
+        # 3. Combinar y limpiar duplicados
+        combined_suggestions = list(set(name_suggestions + type_suggestions))
+
+        # 4. Ordenar alfabéticamente
+        combined_suggestions.sort()
+
+        # 5. Limitar el número de sugerencias
+        suggestions = combined_suggestions[:MAX_SUGGESTIONS]
+
     elif pokemon_input_box.active and not pokemon_input_box.text:
          suggestions = [] # No mostrar sugerencias si la caja está vacía
+         error_message = "" # Limpiar mensajes
+         success_message = ""
+
 
     # --- Dibujar ---
     screen.fill(BG_COLOR)
@@ -362,7 +410,7 @@ while running:
                  pygame.draw.rect(screen, SUGGESTION_BG_COLOR, suggestion_rect)
 
             pygame.draw.rect(screen, INPUT_BORDER_COLOR, suggestion_rect, 1) # Borde
-            text_surface = FONT.render(suggestion, True, TEXT_COLOR)
+            text_surface = FONT.render(suggestion.capitalize(), True, TEXT_COLOR) # Capitalizar la primera letra para mostrar
             screen.blit(text_surface, (suggestion_rect.x + PADDING, suggestion_rect.y + (SUGGESTION_HEIGHT - text_surface.get_height()) // 2))
 
     # Dibujar información del Pokémon seleccionado
@@ -398,8 +446,7 @@ while running:
         explanation_lines = [
             "Nota sobre 'probabilidad' y regresión:",
             "La efectividad de tipo Pokémon es una regla fija (0x, 0.5x, 1x, 2x, 4x).",
-            "El valor 0-100% mostrado es un mapeo arbitrario del multiplicador real.",
-        ]
+            "El valor 0-100% mostrado es un mapeo arbitrario del multiplicador real.",        ]
         for line in explanation_lines:
             explanation_surface = FONT.render(line, True, (80, 80, 80)) # Gris oscuro para la explicación
             screen.blit(explanation_surface, (PADDING, info_y))
@@ -416,9 +463,7 @@ while running:
         screen.blit(success_surface, (PADDING, message_y))
 
 
-    # --- Actualizar Pantalla ---
     pygame.display.flip()
-
 
 pygame.quit()
 sys.exit()
