@@ -290,10 +290,12 @@ if not all_pokemon_names:
 print(f"Cargados {len(all_pokemon_names)} nombres de Pokémon.")
 
 # --- Configuración de la UI ---
-pokemon_input_box = InputBox(PADDING, PADDING + FONT_SIZE + 5, 300, INPUT_BOX_HEIGHT) # Ajustada posición Y
+# Ajuste de la posición Y para dejar espacio para las etiquetas encima
+pokemon_input_box = InputBox(PADDING, PADDING + FONT_SIZE + 5, 300, INPUT_BOX_HEIGHT)
 pokemon_input_box.set_placeholder("Nombre o Tipo de Pokémon") # Actualizado placeholder
 
-target_type_input_box = InputBox(PADDING, PADDING + FONT_SIZE + 5 + INPUT_BOX_HEIGHT + PADDING + FONT_SIZE + 5, 200, INPUT_BOX_HEIGHT) # Ajustada posición Y
+# Ajuste de la posición Y para dejar espacio para las etiquetas encima
+target_type_input_box = InputBox(PADDING, PADDING + FONT_SIZE + 5 + INPUT_BOX_HEIGHT + PADDING + FONT_SIZE + 5, 200, INPUT_BOX_HEIGHT)
 target_type_input_box.set_placeholder("Tipo o Nombre de Oponente") # Actualizado placeholder
 
 # Variables para sugerencias del primer InputBox
@@ -444,6 +446,10 @@ while running:
                                         calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
                                         success_message = f"Efectividad calculada contra tipo {opponent_type_raw.capitalize()}."
                                         error_message = "" # Limpiar error si tuvo éxito
+                                        # Limpiar sugerencias de tipo después de procesar la entrada
+                                        target_type_suggestions = []
+                                        highlighted_target_type_suggestion_index = -1
+
 
                                    # Si no es un tipo válido, intentar como nombre de Pokémon
                                    else:
@@ -459,6 +465,10 @@ while running:
                                                 calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
                                                 success_message = f"Efectividad calculada contra {opponent_input_text.capitalize()} ({opponent_type_raw.capitalize()})."
                                                 error_message = "" # Limpiar error si tuvo éxito
+                                                # Limpiar sugerencias de tipo después de procesar la entrada
+                                                target_type_suggestions = []
+                                                highlighted_target_type_suggestion_index = -1
+
                                              else: # Pokémon encontrado pero sin tipos (no debería pasar en PokeAPI, pero como seguridad)
                                                 error_message = f"Pokémon '{opponent_input_text.capitalize()}' encontrado pero sin tipos."
                                                 success_message = ""
@@ -638,45 +648,6 @@ while running:
     screen.blit(label_target_type, (target_type_input_box.rect.x, target_type_input_box.rect.y - FONT_SIZE - 5)) # Posición ajustada
 
 
-    # --- Dibujar sugerencias (solo para la caja activa que tenga sugerencias) ---
-    current_suggestions = []
-    current_highlighted_index = -1
-    suggestion_box_x = 0
-    suggestion_box_y = 0
-
-    if pokemon_input_box.active and pokemon_suggestions:
-        current_suggestions = pokemon_suggestions
-        current_highlighted_index = highlighted_pokemon_suggestion_index
-        suggestion_box_x = pokemon_input_box.rect.x
-        suggestion_box_y = pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
-        suggestion_box_width = pokemon_input_box.rect.width
-
-    elif target_type_input_box.active and target_type_suggestions:
-        current_suggestions = target_type_suggestions
-        current_highlighted_index = highlighted_target_type_suggestion_index
-        suggestion_box_x = target_type_input_box.rect.x
-        suggestion_box_y = target_type_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
-        suggestion_box_width = target_type_input_box.rect.width
-
-
-    if current_suggestions:
-        for i, suggestion in enumerate(current_suggestions):
-            suggestion_rect = pygame.Rect(suggestion_box_x, suggestion_box_y + i * SUGGESTION_HEIGHT, suggestion_box_width, SUGGESTION_HEIGHT)
-
-            # Determinar el color de fondo de la sugerencia
-            bg_color = SUGGESTION_BG_COLOR
-            if i == current_highlighted_index:
-                 bg_color = SUGGESTION_HIGHLIGHT_COLOR # Color para sugerencia resaltada por teclado
-            # Si el ratón está sobre la sugerencia, tiene prioridad sobre el resaltado de teclado
-            if suggestion_rect.collidepoint(pygame.mouse.get_pos()):
-                 bg_color = SUGGESTION_HOVER_COLOR # Color para mouse hover
-
-            pygame.draw.rect(screen, bg_color, suggestion_rect)
-            pygame.draw.rect(screen, INPUT_BORDER_COLOR, suggestion_rect, 1) # Borde
-
-            text_surface = FONT.render(suggestion.capitalize(), True, TEXT_COLOR) # Capitalizar la primera letra para mostrar
-            screen.blit(text_surface, (suggestion_rect.x + PADDING, suggestion_rect.y + (SUGGESTION_HEIGHT - text_surface.get_height()) // 2))
-
     # Dibujar información del Pokémon seleccionado (atacante)
     info_y = target_type_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING * 2
     if selected_pokemon_name:
@@ -728,7 +699,49 @@ while running:
         screen.blit(success_surface, (PADDING, message_y))
 
 
-  
+    # --- Dibujar sugerencias (solo para la caja activa que tenga sugerencias) ---
+    # Mover esta sección al final para superponer las sugerencias
+    current_suggestions = []
+    current_highlighted_index = -1
+    suggestion_box_x = 0
+    suggestion_box_y = 0
+    suggestion_box_width = 0 # Inicializar el ancho
+
+    if pokemon_input_box.active and pokemon_suggestions:
+        current_suggestions = pokemon_suggestions
+        current_highlighted_index = highlighted_pokemon_suggestion_index
+        suggestion_box_x = pokemon_input_box.rect.x
+        suggestion_box_y = pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
+        suggestion_box_width = pokemon_input_box.rect.width # Usar el ancho de la caja de Pokémon
+
+    elif target_type_input_box.active and target_type_suggestions:
+        current_suggestions = target_type_suggestions
+        current_highlighted_index = highlighted_target_type_suggestion_index
+        suggestion_box_x = target_type_input_box.rect.x
+        suggestion_box_y = target_type_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
+        suggestion_box_width = target_type_input_box.rect.width # Usar el ancho de la caja de tipo oponente
+
+
+    if current_suggestions:
+        for i, suggestion in enumerate(current_suggestions):
+            suggestion_rect = pygame.Rect(suggestion_box_x, suggestion_box_y + i * SUGGESTION_HEIGHT, suggestion_box_width, SUGGESTION_HEIGHT)
+
+            # Determinar el color de fondo de la sugerencia
+            bg_color = SUGGESTION_BG_COLOR
+            if i == current_highlighted_index:
+                 bg_color = SUGGESTION_HIGHLIGHT_COLOR # Color para sugerencia resaltada por teclado
+            # Si el ratón está sobre la sugerencia, tiene prioridad sobre el resaltado de teclado
+            if suggestion_rect.collidepoint(pygame.mouse.get_pos()):
+                 bg_color = SUGGESTION_HOVER_COLOR # Color para mouse hover
+
+            pygame.draw.rect(screen, bg_color, suggestion_rect)
+            pygame.draw.rect(screen, INPUT_BORDER_COLOR, suggestion_rect, 1) # Borde
+
+            text_surface = FONT.render(suggestion.capitalize(), True, TEXT_COLOR) # Capitalizar la primera letra para mostrar
+            screen.blit(text_surface, (suggestion_rect.x + PADDING, suggestion_rect.y + (SUGGESTION_HEIGHT - text_surface.get_height()) // 2))
+
+
+   
     pygame.display.flip()
 
 
