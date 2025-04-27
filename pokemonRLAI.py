@@ -217,6 +217,63 @@ class InputBox:
         elif self.placeholder_surface and not self.active:
              screen.blit(self.placeholder_surface, (self.rect.x + PADDING, self.rect.y + (self.rect.height - self.placeholder_surface.get_height()) // 2))
 
+# --- Función para actualizar las sugerencias de Pokémon (para el primer InputBox) ---
+def update_pokemon_suggestions(search_text, all_pokemon_names, valid_types):
+    """
+    Genera y devuelve una lista de sugerencias de Pokémon basada en el texto de búsqueda.
+    Busca por prefijo de nombre y por tipo si el texto coincide con un tipo válido.
+    """
+    search_text_lower = search_text.lower()
+    name_suggestions = []
+    type_suggestions = []
+    current_error_message = ""
+    current_success_message = ""
+
+    # 1. Buscar por nombre (prefijo)
+    if search_text_lower:
+        name_suggestions = [name for name in all_pokemon_names if name.startswith(search_text_lower)]
+
+    # 2. Buscar por tipo si el texto coincide exactamente con un tipo conocido
+    if search_text_lower in valid_types:
+         current_success_message = f"Buscando Pokémon de tipo {search_text_lower}..."
+         # Nota: En una aplicación real, querrías manejar esto de forma asíncrona
+         # para no bloquear la UI mientras se espera la respuesta de la API.
+         # Aquí, bloquearemos brevemente para simplificar.
+         type_pokemon_names = get_pokemon_by_type(search_text_lower)
+         if type_pokemon_names:
+             type_suggestions = type_pokemon_names
+             current_success_message = f"Sugerencias por tipo {search_text_lower} cargadas."
+         else:
+             current_error_message = f"No se encontraron Pokémon de tipo {search_text_lower}."
+             current_success_message = "" # Limpiar mensaje de éxito si hubo error al buscar por tipo
+
+
+    # 3. Combinar y limpiar duplicados
+    combined_suggestions = list(set(name_suggestions + type_suggestions))
+
+    # 4. Ordenar alfabéticamente
+    combined_suggestions.sort()
+
+    # 5. Limitar el número de sugerencias
+    suggestions = combined_suggestions[:MAX_SUGGESTIONS]
+
+    return suggestions, current_error_message, current_success_message
+
+# --- Función para actualizar las sugerencias de Tipos (para el segundo InputBox) ---
+def update_type_suggestions(search_text, valid_types):
+    """
+    Genera y devuelve una lista de sugerencias de tipos válidos basada en el texto de búsqueda.
+    """
+    search_text_lower = search_text.lower()
+    if search_text_lower:
+        # Buscar tipos que empiecen con el texto de búsqueda
+        suggestions = [type_name for type_name in valid_types if type_name.startswith(search_text_lower)]
+        suggestions.sort() # Ordenar alfabéticamente
+        return suggestions[:MAX_SUGGESTIONS] # Limitar el número de sugerencias
+    else:
+        return [] # No mostrar sugerencias si la caja está vacía
+
+
 # --- Inicialización de Pygame ---
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -233,14 +290,20 @@ if not all_pokemon_names:
 print(f"Cargados {len(all_pokemon_names)} nombres de Pokémon.")
 
 # --- Configuración de la UI ---
-pokemon_input_box = InputBox(PADDING, PADDING, 400, INPUT_BOX_HEIGHT)
+pokemon_input_box = InputBox(PADDING, PADDING + FONT_SIZE + 5, 300, INPUT_BOX_HEIGHT) # Ajustada posición Y
 pokemon_input_box.set_placeholder("Nombre o Tipo de Pokémon") # Actualizado placeholder
 
-target_type_input_box = InputBox(PADDING, PADDING + INPUT_BOX_HEIGHT + PADDING, 400, INPUT_BOX_HEIGHT)
-target_type_input_box.set_placeholder("Tipo del oponente")
+target_type_input_box = InputBox(PADDING, PADDING + FONT_SIZE + 5 + INPUT_BOX_HEIGHT + PADDING + FONT_SIZE + 5, 200, INPUT_BOX_HEIGHT) # Ajustada posición Y
+target_type_input_box.set_placeholder("Tipo o Nombre de Oponente") # Actualizado placeholder
 
-suggestions = []
-highlighted_suggestion_index = -1 # Índice de la sugerencia resaltada por teclado
+# Variables para sugerencias del primer InputBox
+pokemon_suggestions = []
+highlighted_pokemon_suggestion_index = -1
+
+# Variables para sugerencias del segundo InputBox
+target_type_suggestions = []
+highlighted_target_type_suggestion_index = -1
+
 selected_pokemon_name = ""
 selected_pokemon_types = []
 calculated_effectiveness_multiplier = None
@@ -257,22 +320,23 @@ while running:
             running = False
 
         # Manejar eventos de las cajas de entrada (para escribir texto)
+        # handle_event de InputBox actualiza el texto y el estado activo
         pokemon_input_box.handle_event(event)
         target_type_input_box.handle_event(event)
 
-        # Manejar eventos de teclado adicionales para la navegación de sugerencias
+        # --- Manejar eventos de teclado adicionales para la navegación y selección de sugerencias ---
         if event.type == pygame.KEYDOWN:
-            # Navegación con cursores y selección con Enter (solo si la caja de Pokémon está activa y hay sugerencias)
-            if pokemon_input_box.active and suggestions:
+            # Si la caja de Pokémon está activa y hay sugerencias
+            if pokemon_input_box.active and pokemon_suggestions:
                 if event.key == pygame.K_DOWN:
-                    highlighted_suggestion_index = (highlighted_suggestion_index + 1) % len(suggestions)
+                    highlighted_pokemon_suggestion_index = (highlighted_pokemon_suggestion_index + 1) % len(pokemon_suggestions)
                 elif event.key == pygame.K_UP:
-                    highlighted_suggestion_index = (highlighted_suggestion_index - 1) % len(suggestions)
+                    highlighted_pokemon_suggestion_index = (highlighted_pokemon_suggestion_index - 1 + len(pokemon_suggestions)) % len(pokemon_suggestions) # Asegurar índice positivo
                 elif event.key == pygame.K_RETURN:
                     # Si hay una sugerencia resaltada, seleccionarla
-                    if highlighted_suggestion_index != -1:
-                        name_to_select = suggestions[highlighted_suggestion_index].lower() # Usar minúsculas para la búsqueda API
-                        # --- Lógica de selección (duplicada del clic del ratón) ---
+                    if highlighted_pokemon_suggestion_index != -1:
+                        name_to_select = pokemon_suggestions[highlighted_pokemon_suggestion_index].lower() # Usar minúsculas para la búsqueda API
+                        # --- Lógica de selección de Pokémon (duplicada del clic del ratón) ---
                         error_message = "" # Limpiar errores anteriores
                         success_message = "Buscando Pokémon..."
                         pygame.display.flip() # Actualizar pantalla para mostrar el mensaje "Buscando Pokémon..."
@@ -283,8 +347,8 @@ while running:
                             selected_pokemon_name = name_to_select.capitalize()
                             selected_pokemon_types = pokemon_data
                             pokemon_input_box.text = name_to_select # Poner el nombre completo en la caja
-                            suggestions = [] # Limpiar sugerencias después de la selección
-                            highlighted_suggestion_index = -1 # Resetear índice resaltado
+                            pokemon_suggestions = [] # Limpiar sugerencias después de la selección
+                            highlighted_pokemon_suggestion_index = -1 # Resetear índice resaltado
                             success_message = f"Datos de {selected_pokemon_name} cargados."
                             error_message = ""
                             calculated_effectiveness_multiplier = None # Reiniciar cálculo de efectividad
@@ -295,7 +359,7 @@ while running:
                             selected_pokemon_types = []
                             error_message = f"Pokémon '{name_to_select}' no encontrado."
                             success_message = ""
-                        # --- Fin Lógica de selección ---
+                        # --- Fin Lógica de selección de Pokémon ---
                     else:
                         # Si no hay sugerencia resaltada, pero se presiona Enter, intentar buscar el texto actual
                          name_to_select = pokemon_input_box.text.lower() # Usar minúsculas para la búsqueda API
@@ -309,8 +373,8 @@ while running:
                                 selected_pokemon_name = name_to_select.capitalize()
                                 selected_pokemon_types = pokemon_data
                                 pokemon_input_box.text = name_to_select # Poner el nombre completo en la caja
-                                suggestions = [] # Limpiar sugerencias
-                                highlighted_suggestion_index = -1 # Resetear índice resaltado
+                                pokemon_suggestions = [] # Limpiar sugerencias
+                                highlighted_pokemon_suggestion_index = -1 # Resetear índice resaltado
                                 success_message = f"Datos de {selected_pokemon_name} cargados."
                                 error_message = ""
                                 calculated_effectiveness_multiplier = None # Reiniciar cálculo de efectividad
@@ -324,38 +388,108 @@ while running:
                             error_message = "Introduce un nombre o tipo de Pokémon."
                             success_message = ""
 
-            # Si se presiona Enter en la caja de tipo oponente
-            if target_type_input_box.active and event.key == pygame.K_RETURN:
-                 # Disparar el cálculo de efectividad si hay un Pokémon seleccionado
-                 if selected_pokemon_types and target_type_input_box.text:
-                      opponent_type_raw = target_type_input_box.text.lower()
-                      # Validación simple: ¿Existe el tipo en nuestra tabla? (no es perfecta, pero ayuda)
-                      if opponent_type_raw in TYPE_EFFECTIVENESS:
-                            error_message = ""
-                            # Calcular efectividad para el tipo primario del atacante contra el oponente
-                            attacker_primary_type = selected_pokemon_types[0]
-                            calculated_multiplier = calculate_effectiveness([attacker_primary_type], [opponent_type_raw]) # Pasar lista de 1 tipo para la función
-                            calculated_effectiveness_multiplier = calculated_multiplier
-                            calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
-                      else:
-                            error_message = f"Tipo '{opponent_type_raw}' no reconocido."
-                            calculated_effectiveness_multiplier = None
-                            calculated_effectiveness_percentage = None
-                 elif not selected_pokemon_types:
-                      error_message = "Selecciona un Pokémon primero."
-                 else:
-                      error_message = "Introduce el tipo del oponente."
+            # Si la caja de tipo oponente está activa y hay sugerencias de tipo
+            elif target_type_input_box.active and target_type_suggestions:
+                 if event.key == pygame.K_DOWN:
+                    highlighted_target_type_suggestion_index = (highlighted_target_type_suggestion_index + 1) % len(target_type_suggestions)
+                 elif event.key == pygame.K_UP:
+                    highlighted_target_type_suggestion_index = (highlighted_target_type_suggestion_index - 1 + len(target_type_suggestions)) % len(target_type_suggestions) # Asegurar índice positivo
+                 elif event.key == pygame.K_RETURN:
+                     # Si hay una sugerencia de tipo resaltada, seleccionarla y usarla para el cálculo
+                     if highlighted_target_type_suggestion_index != -1:
+                         opponent_input_text = target_type_suggestions[highlighted_target_type_suggestion_index].lower()
+                         target_type_input_box.text = opponent_input_text # Poner el tipo en la caja
+                         target_type_suggestions = [] # Limpiar sugerencias
+                         highlighted_target_type_suggestion_index = -1 # Resetear índice
+
+                         # --- Lógica de cálculo de efectividad (modificada) ---
+                         if selected_pokemon_types:
+                             error_message = ""
+                             # Usar el tipo seleccionado directamente para el cálculo
+                             opponent_type_raw = opponent_input_text
+                             if opponent_type_raw in TYPE_EFFECTIVENESS:
+                                error_message = ""
+                                attacker_primary_type = selected_pokemon_types[0]
+                                calculated_multiplier = calculate_effectiveness([attacker_primary_type], [opponent_type_raw])
+                                calculated_effectiveness_multiplier = calculated_multiplier
+                                calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
+                                success_message = f"Efectividad calculada contra tipo {opponent_type_raw.capitalize()}."
+                             else:
+                                # Esto no debería ocurrir si la sugerencia es de VALID_TYPES, pero como fallback
+                                error_message = f"Tipo '{opponent_type_raw}' no reconocido."
+                                calculated_effectiveness_multiplier = None
+                                calculated_effectiveness_percentage = None
+                                success_message = ""
+                         elif not selected_pokemon_types:
+                              error_message = "Selecciona un Pokémon atacante primero."
+                              success_message = ""
+                         # --- Fin Lógica de cálculo de efectividad ---
+                     else:
+                         # Si no hay sugerencia de tipo resaltada, pero se presiona Enter,
+                         # intentar usar el texto actual como tipo o nombre de Pokémon
+                         opponent_input_text = target_type_input_box.text.lower()
+                         if opponent_input_text:
+                              # --- Lógica de cálculo de efectividad (modificada) ---
+                              if selected_pokemon_types:
+                                   error_message = ""
+                                   success_message = "Procesando entrada del oponente..."
+                                   pygame.display.flip() # Actualizar para mostrar mensaje
+
+                                   # Intentar como tipo primero
+                                   if opponent_input_text in TYPE_EFFECTIVENESS:
+                                        opponent_type_raw = opponent_input_text
+                                        attacker_primary_type = selected_pokemon_types[0]
+                                        calculated_multiplier = calculate_effectiveness([attacker_primary_type], [opponent_type_raw])
+                                        calculated_effectiveness_multiplier = calculated_multiplier
+                                        calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
+                                        success_message = f"Efectividad calculada contra tipo {opponent_type_raw.capitalize()}."
+                                        error_message = "" # Limpiar error si tuvo éxito
+
+                                   # Si no es un tipo válido, intentar como nombre de Pokémon
+                                   else:
+                                        pokemon_data = get_pokemon_types(opponent_input_text)
+                                        if pokemon_data is not None:
+                                             opponent_types = pokemon_data
+                                             # Usar el primer tipo del Pokémon oponente para el cálculo
+                                             if opponent_types:
+                                                opponent_type_raw = opponent_types[0] # Usar el primer tipo del oponente
+                                                attacker_primary_type = selected_pokemon_types[0]
+                                                calculated_multiplier = calculate_effectiveness([attacker_primary_type], [opponent_type_raw])
+                                                calculated_effectiveness_multiplier = calculated_multiplier
+                                                calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
+                                                success_message = f"Efectividad calculada contra {opponent_input_text.capitalize()} ({opponent_type_raw.capitalize()})."
+                                                error_message = "" # Limpiar error si tuvo éxito
+                                             else: # Pokémon encontrado pero sin tipos (no debería pasar en PokeAPI, pero como seguridad)
+                                                error_message = f"Pokémon '{opponent_input_text.capitalize()}' encontrado pero sin tipos."
+                                                success_message = ""
+                                                calculated_effectiveness_multiplier = None
+                                                calculated_effectiveness_percentage = None
+                                        else:
+                                             # No es un tipo ni un nombre de Pokémon válido
+                                             error_message = f"Entrada '{opponent_input_text}' no reconocida como tipo o Pokémon."
+                                             success_message = ""
+                                             calculated_effectiveness_multiplier = None
+                                             calculated_effectiveness_percentage = None
+
+                              elif not selected_pokemon_types:
+                                   error_message = "Selecciona un Pokémon atacante primero."
+                                   success_message = ""
+                              # --- Fin Lógica de cálculo de efectividad (modificada) ---
+                         else:
+                              error_message = "Introduce un tipo o nombre de Pokémon oponente."
+                              success_message = ""
 
 
-        # --- Manejar clics en sugerencias (solo cuando la caja de pokemon_input está activa) ---
+        # --- Manejar clics del ratón ---
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if pokemon_input_box.active and suggestions:
+            # Clic en sugerencias de Pokémon
+            if pokemon_input_box.active and pokemon_suggestions:
                 suggestion_y = pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
-                suggestion_rects = [pygame.Rect(pokemon_input_box.rect.x, suggestion_y + i * SUGGESTION_HEIGHT, pokemon_input_box.rect.width, SUGGESTION_HEIGHT) for i in range(len(suggestions))]
+                suggestion_rects = [pygame.Rect(pokemon_input_box.rect.x, suggestion_y + i * SUGGESTION_HEIGHT, pokemon_input_box.rect.width, SUGGESTION_HEIGHT) for i in range(len(pokemon_suggestions))]
                 for i, rect in enumerate(suggestion_rects):
                     if rect.collidepoint(event.pos):
-                        # --- Seleccionar esta sugerencia ---
-                        name_to_select = suggestions[i].lower() # Usar minúsculas para la búsqueda API
+                        # --- Seleccionar esta sugerencia de Pokémon ---
+                        name_to_select = pokemon_suggestions[i].lower() # Usar minúsculas para la búsqueda API
                         error_message = "" # Limpiar errores anteriores
                         success_message = "Buscando Pokémon..."
                         pygame.display.flip() # Actualizar pantalla para mostrar el mensaje "Buscando Pokémon..."
@@ -366,8 +500,8 @@ while running:
                             selected_pokemon_name = name_to_select.capitalize()
                             selected_pokemon_types = pokemon_data
                             pokemon_input_box.text = name_to_select # Poner el nombre completo en la caja
-                            suggestions = [] # Limpiar sugerencias después de la selección
-                            highlighted_suggestion_index = -1 # Resetear índice resaltado
+                            pokemon_suggestions = [] # Limpiar sugerencias después de la selección
+                            highlighted_pokemon_suggestion_index = -1 # Resetear índice resaltado
                             success_message = f"Datos de {selected_pokemon_name} cargados."
                             error_message = ""
                             calculated_effectiveness_multiplier = None # Reiniciar cálculo de efectividad
@@ -379,56 +513,114 @@ while running:
                             error_message = f"Pokémon '{name_to_select}' no encontrado."
                             success_message = ""
                         break # Salir del bucle después de seleccionar una sugerencia
-            # Si se hace clic fuera de la caja de entrada de Pokémon, desactiva el resaltado de sugerencias
-            elif not pokemon_input_box.rect.collidepoint(event.pos):
-                 highlighted_suggestion_index = -1
+            # Clic en sugerencias de Tipo Oponente
+            elif target_type_input_box.active and target_type_suggestions:
+                 suggestion_y = target_type_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
+                 suggestion_rects = [pygame.Rect(target_type_input_box.rect.x, suggestion_y + i * SUGGESTION_HEIGHT, target_type_input_box.rect.width, SUGGESTION_HEIGHT) for i in range(len(target_type_suggestions))]
+                 for i, rect in enumerate(suggestion_rects):
+                     if rect.collidepoint(event.pos):
+                         # --- Seleccionar esta sugerencia de Tipo ---
+                         opponent_input_text = target_type_suggestions[i].lower()
+                         target_type_input_box.text = opponent_input_text # Poner el tipo en la caja
+                         target_type_suggestions = [] # Limpiar sugerencias
+                         highlighted_target_type_suggestion_index = -1 # Resetear índice
+
+                         # --- Lógica de cálculo de efectividad (duplicada del Enter) ---
+                         if selected_pokemon_types:
+                             error_message = ""
+                             # Usar el tipo seleccionado directamente para el cálculo
+                             opponent_type_raw = opponent_input_text
+                             if opponent_type_raw in TYPE_EFFECTIVENESS:
+                                error_message = ""
+                                attacker_primary_type = selected_pokemon_types[0]
+                                calculated_multiplier = calculate_effectiveness([attacker_primary_type], [opponent_type_raw])
+                                calculated_effectiveness_multiplier = calculated_multiplier
+                                calculated_effectiveness_percentage = map_multiplier_to_percentage(calculated_multiplier)
+                                success_message = f"Efectividad calculada contra tipo {opponent_type_raw.capitalize()}."
+                             else:
+                                # Esto no debería ocurrir si la sugerencia es de VALID_TYPES, pero como fallback
+                                error_message = f"Tipo '{opponent_type_raw}' no reconocido."
+                                calculated_effectiveness_multiplier = None
+                                calculated_effectiveness_percentage = None
+                                success_message = ""
+                         elif not selected_pokemon_types:
+                              error_message = "Selecciona un Pokémon atacante primero."
+                              success_message = ""
+                         # --- Fin Lógica de cálculo de efectividad ---
+                         break # Salir del bucle después de seleccionar una sugerencia
+
+            # Si se hace clic fuera de una caja de entrada activa con sugerencias, desactiva el resaltado y limpia sugerencias
+            elif not pokemon_input_box.rect.collidepoint(event.pos) and pokemon_input_box.active:
+                 pokemon_suggestions = []
+                 highlighted_pokemon_suggestion_index = -1
+            elif not target_type_input_box.rect.collidepoint(event.pos) and target_type_input_box.active:
+                 target_type_suggestions = []
+                 highlighted_target_type_suggestion_index = -1
 
 
     # --- Lógica de Autocompletado ---
-    # Solo actualizar sugerencias si la caja de Pokémon está activa
+    # Actualizar sugerencias solo si la caja de Pokémon está activa
     if pokemon_input_box.active:
-        search_text = pokemon_input_box.text.lower()
-        # 1. Buscar por nombre
-        name_suggestions = [name for name in all_pokemon_names if name.startswith(search_text)]
+        # Llamar a la función para obtener las sugerencias de Pokémon
+        new_pokemon_suggestions, current_error, current_success = update_pokemon_suggestions(
+            pokemon_input_box.text,
+            all_pokemon_names,
+            VALID_TYPES
+        )
+        # Actualizar las variables globales con los resultados de la función
+        pokemon_suggestions = new_pokemon_suggestions
+        # Solo actualizar mensajes si la función devolvió algo
+        if current_error:
+            error_message = current_error
+            success_message = "" # Limpiar éxito si hay error
+        elif current_success:
+            success_message = current_success
+            error_message = "" # Limpiar error si hay éxito
+        else:
+             # Si la función no devolvió mensajes específicos, mantener los mensajes generales
+             pass
 
-        # 2. Buscar por tipo si el texto coincide exactamente con un tipo conocido
-        type_suggestions = []
-        if search_text in VALID_TYPES:
-             # Limpiar mensajes de estado mientras se busca por tipo
-             error_message = ""
-             success_message = f"Buscando Pokémon de tipo {search_text}..."
-             pygame.display.flip() # Actualizar para mostrar el mensaje de buscando por tipo
-             type_pokemon_names = get_pokemon_by_type(search_text)
-             if type_pokemon_names:
-                 type_suggestions = type_pokemon_names
-                 success_message = f"Sugerencias por tipo {search_text} cargadas."
-             else:
-                 error_message = f"No se encontraron Pokémon de tipo {search_text}."
-                 success_message = "" # Limpiar mensaje de éxito si hubo error al buscar por tipo
+        # Si la lista de sugerencias de Pokémon cambia, resetear o ajustar el índice resaltado
+        if not pokemon_suggestions:
+             highlighted_pokemon_suggestion_index = -1
+        elif highlighted_pokemon_suggestion_index >= len(pokemon_suggestions):
+             highlighted_pokemon_suggestion_index = len(pokemon_suggestions) - 1
+        elif highlighted_pokemon_suggestion_index == -1 and pokemon_suggestions:
+             highlighted_pokemon_suggestion_index = 0 # Resaltar la primera sugerencia por defecto si hay alguna
+
+        # Limpiar sugerencias del segundo input si el primero está activo
+        target_type_suggestions = []
+        highlighted_target_type_suggestion_index = -1
 
 
-        # 3. Combinar y limpiar duplicados
-        combined_suggestions = list(set(name_suggestions + type_suggestions))
+    # Actualizar sugerencias solo si la caja de Tipo Oponente está activa
+    elif target_type_input_box.active:
+         # Llamar a la función para obtener las sugerencias de Tipos
+         new_target_type_suggestions = update_type_suggestions(
+             target_type_input_box.text,
+             VALID_TYPES
+         )
+         target_type_suggestions = new_target_type_suggestions
 
-        # 4. Ordenar alfabéticamente
-        combined_suggestions.sort()
+         # Si la lista de sugerencias de Tipo Oponente cambia, resetear o ajustar el índice resaltado
+         if not target_type_suggestions:
+              highlighted_target_type_suggestion_index = -1
+         elif highlighted_target_type_suggestion_index >= len(target_type_suggestions):
+              highlighted_target_type_suggestion_index = len(target_type_suggestions) - 1
+         elif highlighted_target_type_suggestion_index == -1 and target_type_suggestions:
+              highlighted_target_type_suggestion_index = 0 # Resaltar la primera sugerencia por defecto si hay alguna
 
-        # 5. Limitar el número de sugerencias
-        suggestions = combined_suggestions[:MAX_SUGGESTIONS]
-
-        # Si la lista de sugerencias cambia, resetear el índice resaltado
-        if not suggestions:
-             highlighted_suggestion_index = -1
-        elif highlighted_suggestion_index >= len(suggestions):
-             highlighted_suggestion_index = len(suggestions) - 1
-        elif highlighted_suggestion_index == -1 and suggestions:
-             highlighted_suggestion_index = 0 # Resaltar la primera sugerencia por defecto si hay alguna
-
-    elif not pokemon_input_box.active:
-         # Limpiar sugerencias y resaltado si la caja no está activa
-         suggestions = []
-         highlighted_suggestion_index = -1
+         # Limpiar sugerencias del primer input si el segundo está activo
+         pokemon_suggestions = []
+         highlighted_pokemon_suggestion_index = -1
          # No limpiar mensajes de error/éxito aquí, ya que podrían ser relevantes para el Pokémon seleccionado
+
+    # Si ninguna caja está activa, limpiar sugerencias y resaltados
+    else:
+        pokemon_suggestions = []
+        highlighted_pokemon_suggestion_index = -1
+        target_type_suggestions = []
+        highlighted_target_type_suggestion_index = -1
 
 
     # --- Dibujar ---
@@ -439,21 +631,41 @@ while running:
     target_type_input_box.draw(screen)
 
     # Dibujar etiquetas de las cajas de entrada
+    # Ajuste de la posición Y para que las etiquetas aparezcan encima de los inputs
     label_pokemon = FONT.render("Pokémon:", True, TEXT_COLOR)
-    screen.blit(label_pokemon, (pokemon_input_box.rect.x, pokemon_input_box.rect.y - FONT_SIZE - 5))
-    label_target_type = FONT.render("", True, TEXT_COLOR) #elimina despues esto yeltsin
-    screen.blit(label_target_type, (target_type_input_box.rect.x, target_type_input_box.rect.y - FONT_SIZE - 5))
+    screen.blit(label_pokemon, (pokemon_input_box.rect.x, pokemon_input_box.rect.y - FONT_SIZE - 5)) # Posición ajustada
+    label_target_type = FONT.render("Oponente (Tipo o Nombre):", True, TEXT_COLOR) # Etiqueta actualizada
+    screen.blit(label_target_type, (target_type_input_box.rect.x, target_type_input_box.rect.y - FONT_SIZE - 5)) # Posición ajustada
 
 
-    # Dibujar sugerencias
-    if suggestions:
-        suggestion_y = pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
-        for i, suggestion in enumerate(suggestions):
-            suggestion_rect = pygame.Rect(pokemon_input_box.rect.x, suggestion_y + i * SUGGESTION_HEIGHT, pokemon_input_box.rect.width, SUGGESTION_HEIGHT)
+    # --- Dibujar sugerencias (solo para la caja activa que tenga sugerencias) ---
+    current_suggestions = []
+    current_highlighted_index = -1
+    suggestion_box_x = 0
+    suggestion_box_y = 0
+
+    if pokemon_input_box.active and pokemon_suggestions:
+        current_suggestions = pokemon_suggestions
+        current_highlighted_index = highlighted_pokemon_suggestion_index
+        suggestion_box_x = pokemon_input_box.rect.x
+        suggestion_box_y = pokemon_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
+        suggestion_box_width = pokemon_input_box.rect.width
+
+    elif target_type_input_box.active and target_type_suggestions:
+        current_suggestions = target_type_suggestions
+        current_highlighted_index = highlighted_target_type_suggestion_index
+        suggestion_box_x = target_type_input_box.rect.x
+        suggestion_box_y = target_type_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING
+        suggestion_box_width = target_type_input_box.rect.width
+
+
+    if current_suggestions:
+        for i, suggestion in enumerate(current_suggestions):
+            suggestion_rect = pygame.Rect(suggestion_box_x, suggestion_box_y + i * SUGGESTION_HEIGHT, suggestion_box_width, SUGGESTION_HEIGHT)
 
             # Determinar el color de fondo de la sugerencia
             bg_color = SUGGESTION_BG_COLOR
-            if i == highlighted_suggestion_index:
+            if i == current_highlighted_index:
                  bg_color = SUGGESTION_HIGHLIGHT_COLOR # Color para sugerencia resaltada por teclado
             # Si el ratón está sobre la sugerencia, tiene prioridad sobre el resaltado de teclado
             if suggestion_rect.collidepoint(pygame.mouse.get_pos()):
@@ -465,15 +677,15 @@ while running:
             text_surface = FONT.render(suggestion.capitalize(), True, TEXT_COLOR) # Capitalizar la primera letra para mostrar
             screen.blit(text_surface, (suggestion_rect.x + PADDING, suggestion_rect.y + (SUGGESTION_HEIGHT - text_surface.get_height()) // 2))
 
-    # Dibujar información del Pokémon seleccionado
+    # Dibujar información del Pokémon seleccionado (atacante)
     info_y = target_type_input_box.rect.y + INPUT_BOX_HEIGHT + PADDING * 2
     if selected_pokemon_name:
-        name_surface = FONT.render(f"Pokémon: {selected_pokemon_name}", True, TEXT_COLOR)
+        name_surface = FONT.render(f"Pokémon atacante: {selected_pokemon_name}", True, TEXT_COLOR) # Etiqueta actualizada
         screen.blit(name_surface, (PADDING, info_y))
         info_y += FONT_SIZE + PADDING
 
         types_text = ", ".join([t.capitalize() for t in selected_pokemon_types])
-        types_surface = FONT.render(f"Tipos: {types_text}", True, TEXT_COLOR)
+        types_surface = FONT.render(f"Tipos del atacante: {types_text}", True, TEXT_COLOR) # Etiqueta actualizada
         screen.blit(types_surface, (PADDING, info_y))
         info_y += FONT_SIZE + PADDING
 
@@ -482,8 +694,8 @@ while running:
         # Mostrar la efectividad real del juego (multiplicador)
         # Mostrando la efectividad para el tipo primario del atacante contra el(los) tipo(s) del oponente
         attacker_primary_type_display = selected_pokemon_types[0].capitalize() if selected_pokemon_types else "N/A"
-        opponent_type_display = target_type_input_box.text.capitalize() if target_type_input_box.text else "N/A"
-        effectiveness_text = f"Efectividad ({attacker_primary_type_display} vs {opponent_type_display}): {calculated_effectiveness_multiplier}x"
+        opponent_input_display = target_type_input_box.text.capitalize() if target_type_input_box.text else "N/A" # Usar texto de la caja para mostrar
+        effectiveness_text = f"Efectividad ({attacker_primary_type_display} vs {opponent_input_display}): {calculated_effectiveness_multiplier}x"
         effectiveness_surface = FONT.render(effectiveness_text, True, TEXT_COLOR)
         screen.blit(effectiveness_surface, (PADDING, info_y))
         info_y += FONT_SIZE + PADDING
@@ -516,6 +728,7 @@ while running:
         screen.blit(success_surface, (PADDING, message_y))
 
 
+  
     pygame.display.flip()
 
 
