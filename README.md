@@ -1,6 +1,6 @@
 # Pokémon Type Effectiveness Suggester
 
-<h1>Codigo refactorizado siguendo una arquitectura de software simple para mejor lectura y actualizacion del codigo para futuras funciones (la regresion multilineal esta en proceso) Dejare el archivo PokemonRlAI.py como ejemplo de la versiones anteriores esta en su criterio si borrar o no.</h1>
+<h1>Codigo refactorizado siguendo una arquitectura de software simple para mejor lectura y actualizacion del codigo para futuras funciones (la regresion multilineal esta en proceso) Dejare el archivo PokemonRlAI.py como ejemplo de la versiones anteriores está en su criterio si borrar o no.</h1> <br>
 Una sencilla aplicación de escritorio creada con Pygame que te permite buscar Pokémon por nombre o tipo, obtener sus datos de la PokeAPI y calcular la efectividad de tipo de su tipo primario contra un oponente especificado.
 
 ![Screenshot Placeholder](nota 'pon aqui el link )
