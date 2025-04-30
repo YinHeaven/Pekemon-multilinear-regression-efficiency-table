@@ -38,6 +38,6 @@ Esta herramienta utiliza la [PokeAPI](https://pokeapi.co/) para obtener informac
 Asegúrate de tener Python 3 instalado en tu sistema. Luego, clona este repositorio e instala las dependencias necesarias:
 
 ```bash
-git clone [https://github.com/tu_usuario/tu_repositorio.git](https://github.com/tu_usuario/tu_repositorio.git)
-cd tu_repositorio
-pip install -r requirements.txt
+cd pokemon_suggester 
+pip install -r requirements.txt 
+or pip install pygame // pip install pygame requests
