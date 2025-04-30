@@ -3,7 +3,6 @@
 Una sencilla aplicación de escritorio creada con Pygame que te permite buscar Pokémon por nombre o tipo, obtener sus datos de la PokeAPI y calcular la efectividad de tipo de su tipo primario contra un oponente especificado.
 
 ![Screenshot Placeholder](nota 'pon aqui el link )
-*(Considera añadir una captura de pantalla o un GIF aquí para mostrar cómo se ve tu aplicación)*
 
 ## Descripción
 
