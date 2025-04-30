@@ -30,7 +30,7 @@ Esta herramienta utiliza la [PokeAPI](https://pokeapi.co/) para obtener informac
 * **Pygame:** Biblioteca para la creación de la interfaz gráfica y manejo de eventos.
 * **Requests:** Biblioteca para realizar las llamadas a la PokeAPI.
 * **PokeAPI (pokeapi.co):** API pública utilizada para obtener los datos de los Pokémon.
- <img src="https://www.pygame.org/ftp/pygame-badge-SMA.png" width ="20%">
+|<img src="https://www.pygame.org/ftp/pygame-badge-SMA.png" width ="20%">|<img src="https://miro.medium.com/v2/resize:fit:305/1*Q1Nue45Q7N2xMFc6ehEOdg.png">|
 
 ## Instalación
 
