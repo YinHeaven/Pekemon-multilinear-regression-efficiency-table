@@ -31,7 +31,7 @@ Esta herramienta utiliza la [PokeAPI](https://pokeapi.co/) para obtener informac
 * **Requests:** Biblioteca para realizar las llamadas a la PokeAPI.
 * **PokeAPI (pokeapi.co):** API pública utilizada para obtener los datos de los Pokémon.||
 ---
-|<img src="https://www.pygame.org/ftp/pygame-badge-SMA.png" width ="20%">|<img src="https://miro.medium.com/v2/resize:fit:305/1*Q1Nue45Q7N2xMFc6ehEOdg.png" width="20%">|<img src="https://pngdownload.io/wp-content/uploads/2024/02/Python-programming-code-coding-transparent-PNG-image-768x768.webp" width="20%">|
+|<img src="https://www.pygame.org/ftp/pygame-badge-SMA.png" width ="20%">|<img src="https://miro.medium.com/v2/resize:fit:305/1*Q1Nue45Q7N2xMFc6ehEOdg.png" width="20%">|<img src="https://w7.pngwing.com/pngs/891/677/png-transparent-python-logos-and-brands-line-filled-icon-thumbnail.png" width="20%">|
 
 ## Instalación
 
