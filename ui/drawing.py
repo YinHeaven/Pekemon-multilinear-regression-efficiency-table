@@ -1,3 +1,4 @@
+# File: ui/drawing.py
 # drawing.py
 """Funciones auxiliares para dibujar elementos de la UI."""
 
@@ -27,14 +28,23 @@ def draw_pokemon_info(screen, font, start_y, pokemon_name, pokemon_types):
 
     return current_y # Devuelve la siguiente posición Y disponible
 
-def draw_effectiveness_results(screen, font, start_y, multiplier, percentage, attacker_types, opponent_input):
+# --- Función draw_effectiveness_results CORREGIDA ---
+# Esta función ahora espera una LISTA de tipos para el oponente
+def draw_effectiveness_results(screen, font, start_y, multiplier, percentage, attacker_types, opponent_types): # Cambiado opponent_input a opponent_types
     """Dibuja los resultados del cálculo de efectividad."""
     current_y = start_y
     if multiplier is not None:
-        attacker_primary_type_display = attacker_types[0].capitalize() if attacker_types else "N/A"
-        opponent_input_display = opponent_input.capitalize() if opponent_input else "N/A"
+        # Formatear los tipos del atacante (mostrar todos los tipos)
+        attacker_types_str = ", ".join([t.capitalize() for t in attacker_types]) if attacker_types else "N/A"
 
-        effectiveness_text = f"Efectividad ({attacker_primary_type_display} vs {opponent_input_display}): {multiplier}x"
+        # Formatear los tipos del oponente (mostrar todos los tipos)
+        # Usamos .join() en la lista de tipos recibida
+        opponent_types_str = ", ".join([t.capitalize() for t in opponent_types]) if opponent_types else "N/A"
+
+        # Construir la cadena de efectividad
+        # Ahora usamos las cadenas de tipos formateadas directamente
+        effectiveness_text = f"Efectividad ({attacker_types_str} vs {opponent_types_str}): {multiplier}x"
+
         eff_surface = font.render(effectiveness_text, True, C.TEXT_COLOR)
         screen.blit(eff_surface, (C.PADDING, current_y))
         current_y += font.get_height() + C.PADDING // 2
@@ -55,6 +65,7 @@ def draw_effectiveness_results(screen, font, start_y, multiplier, percentage, at
             current_y += font.get_height()
 
     return current_y # Devuelve la siguiente posición Y disponible
+# --- Fin de la Función draw_effectiveness_results CORREGIDA ---
 
 
 def draw_status_message(screen, font, message, is_error):
