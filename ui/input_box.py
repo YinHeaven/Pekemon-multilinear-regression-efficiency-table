@@ -1,5 +1,4 @@
 # ui/input_box.py
-"""Define la clase InputBox para la entrada de texto."""
 
 import pygame
 import constants as C # Usar alias para claridad
@@ -17,7 +16,8 @@ class InputBox:
 
     def set_placeholder(self, text):
         self.placeholder = text
-        self.placeholder_surface = self.font.render(text, True, C.PLACEHOLDER_COLOR)
+        # self.placeholder_surface = self.font.render(text, True, C.PLACEHOLDER_COLOR)
+        self.placeholder_surface = self.font.render(text, True, (150, 150, 150))  # Gris manual
 
     def handle_event(self, event):
         """Maneja eventos de ratón y teclado para la caja de entrada."""
@@ -34,8 +34,8 @@ class InputBox:
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 elif event.key == pygame.K_TAB:
-                     # Podría usarse para cambiar de foco, manejado en Main.py
-                     return "tab"
+                    # Podría usarse para cambiar de foco, manejado en Main.py
+                    return "tab"
                 else:
                     self.text += event.unicode
                 self.update_text_surface()
@@ -43,16 +43,21 @@ class InputBox:
         return None # Ningún evento relevante manejado
 
     def update_text_surface(self):
-         """Actualiza la superficie de texto renderizada."""
-         self.txt_surface = self.font.render(self.text, True, C.TEXT_COLOR)
+        """Actualiza la superficie de texto renderizada."""
+        self.txt_surface = self.font.render(self.text, True, C.TEXT_COLOR)
 
 
     def draw(self, screen):
-        """Dibuja la caja de entrada y su contenido."""
-        # Borde
-        pygame.draw.rect(screen, self.color, self.rect, 2)
-        # Fondo
-        pygame.draw.rect(screen, C.INPUT_BG_COLOR, (self.rect.x + 1, self.rect.y + 1, self.rect.width - 2, self.rect.height - 2))
+        # Fondo con bordes redondeados
+        pygame.draw.rect(screen, C.INPUT_BG_COLOR, self.rect, border_radius=C.BORDER_RADIUS)
+        pygame.draw.rect(screen, self.color, self.rect, 2, border_radius=C.BORDER_RADIUS)
+        
+        # Texto o placeholder
+        if self.text:
+            text_surface = self.font.render(self.text, True, C.TEXT_COLOR)
+            screen.blit(text_surface, (self.rect.x + 10, self.rect.y + (self.rect.h - text_surface.get_height()) // 2))
+        elif self.placeholder_surface and not self.active:
+            screen.blit(self.placeholder_surface, (self.rect.x + 10, self.rect.y + (self.rect.h - self.placeholder_surface.get_height()) // 2))
 
         # Texto o Placeholder
         if self.text:
@@ -63,18 +68,18 @@ class InputBox:
             blit_pos_x = self.rect.x + C.PADDING
             # Si el texto se pasa, muestra el final
             if text_width > available_width:
-                 # Muestra los últimos caracteres que quepan
-                 visible_chars = 0
-                 current_width = 0
-                 for i in range(len(rendered_text) -1, -1, -1):
-                      char_width = self.font.size(rendered_text[i])[0]
-                      if current_width + char_width <= available_width:
-                           current_width += char_width
-                           visible_chars += 1
-                      else:
-                           break
-                 rendered_text_final = rendered_text[-visible_chars:]
-                 self.txt_surface = self.font.render(rendered_text_final, True, C.TEXT_COLOR)
+                # Muestra los últimos caracteres que quepan
+                visible_chars = 0
+                current_width = 0
+                for i in range(len(rendered_text) -1, -1, -1):
+                    char_width = self.font.size(rendered_text[i])[0]
+                    if current_width + char_width <= available_width:
+                        current_width += char_width
+                        visible_chars += 1
+                    else:
+                        break
+                rendered_text_final = rendered_text[-visible_chars:]
+                self.txt_surface = self.font.render(rendered_text_final, True, C.TEXT_COLOR)
 
 
             screen.blit(self.txt_surface, (blit_pos_x, self.rect.y + (self.rect.height - self.txt_surface.get_height()) // 2))

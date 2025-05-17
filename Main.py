@@ -124,6 +124,13 @@ def run_app():
     # -----------------------------------
 
 
+    # --- Activar repetición de teclas ---
+    # delay: 350 ms antes de empezar a repetir
+    # interval: 50 ms entre repeticiones
+    pygame.key.set_repeat(350, 50)
+    # -----------------------------------
+
+
     # --- Carga de Datos Iniciales ---
     print("Cargando datos iniciales...")
     all_pokemon_names = pokeapi_client.get_all_pokemon_names()
@@ -270,6 +277,7 @@ def run_app():
                 return # Salir si no hay atacante seleccionado
 
             if processed_types: # Si se encontró como tipo o como nombre de Pokémon
+              
                 selected_target_types = processed_types # <-- Guardar los tipos del oponente
                 input_box_to_process.text = text_lower # Actualizar input con texto procesado
                 input_box_to_process.update_text_surface()
@@ -438,7 +446,6 @@ def run_app():
                                 status_message = "Introduce un tipo o nombre de oponente."
                             is_status_error = True
 
-
             # --- Fin del Manejo de Eventos de Teclado ---
 
 
@@ -524,6 +531,7 @@ def run_app():
         opponent_display_text = target_input.text # Texto por defecto si no hay tipos seleccionados
         if selected_target_types:
             opponent_display_text = f"({', '.join(t.capitalize() for t in selected_target_types)})"
+
         # -----------------------------------------------------------------
 
         # Pasar la lista de tipos del oponente directamente a la función de dibujo
