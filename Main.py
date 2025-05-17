@@ -1,6 +1,5 @@
 # File: Main.py
 # Main.py
-"""Punto de entrada principal de la aplicación Pokémon Suggester."""
 
 import pygame
 import sys
@@ -11,15 +10,119 @@ import game_logic
 from ui.input_box import InputBox
 from ui import suggestions as suggestion_ui
 from ui import drawing as ui_draw
+from pygame.transform import scale
+import win32gui
+import win32con
+from PIL import Image
+import os
+from pygame.transform import scale
+
+
+
+def draw_custom_title_bar(screen, font):
+    """Dibuja una barra de título"""
+    # Fondo rojo
+    pygame.draw.rect(screen, (200, 0, 0), (0, 0, C.SCREEN_WIDTH, 30))
+    
+    # Título blanco
+    title_text = font.render("Pokédex", True, (255, 255, 255))
+    screen.blit(title_text, (10, 5))
+    
+    # Botón de cerrar (rojo oscuro)
+    close_btn = pygame.Rect(C.SCREEN_WIDTH - 30, 5, 20, 20)
+    pygame.draw.rect(screen, (150, 0, 0), close_btn)
+    pygame.draw.line(screen, (255, 255, 255), (close_btn.x + 5, close_btn.y + 5), 
+                    (close_btn.x + 15, close_btn.y + 15), 2)
+    pygame.draw.line(screen, (255, 255, 255), (close_btn.x + 15, close_btn.y + 5), 
+                    (close_btn.x + 5, close_btn.y + 15), 2)
+    
+    return close_btn  # Retorna el rectángulo para detectar clics
+
+def load_proper_icon():
+    try:
+        icon_path = os.path.join("assets", "pokedex_icon.png")
+        icon = pygame.image.load(icon_path).convert_alpha()
+        icon = scale(icon, (64, 64))  # Redimensiona a tamaño estándar
+        pygame.display.set_icon(icon)
+    except Exception as e:
+        print(f"No se pudo cargar el icono: {e}")
+        # Crea un icono por defecto como fallback
+        default_icon = pygame.Surface((64, 64))
+        default_icon.fill((200, 0, 0))  # Rojo Pokédex
+        pygame.display.set_icon(default_icon)
+
+def create_icon_file():
+    try:
+        img_path = os.path.join("assets", "pokedex_icon.png")
+        ico_path = os.path.join("assets", "pokedex_icon.ico")
+        
+        # Convierte PNG a ICO con múltiples tamaños
+        img = Image.open(img_path)
+        img.save(ico_path, format='ICO', sizes=[(16,16), (32,32), (64,64)])
+        
+        return ico_path
+    except Exception as e:
+        print(f"No se pudo crear archivo .ico: {str(e)}")
+        return None
+
+ico_path = create_icon_file()
+if ico_path:
+    icon = pygame.image.load(ico_path)
+    pygame.display.set_icon(icon)
 
 def run_app():
-    """Inicializa Pygame y ejecuta el bucle principal de la aplicación."""
+
     # --- Inicialización ---
     pygame.init()
     screen = pygame.display.set_mode((C.SCREEN_WIDTH, C.SCREEN_HEIGHT))
-    pygame.display.set_caption("Buscador Pokémon y Efectividad de Tipo vRefactored")
+    load_proper_icon()
+
+    pygame.display.set_caption("Pokédex")  # Título en la barra del sistema (opcional)
+    
     font = pygame.font.Font(None, C.FONT_SIZE)
-    clock = pygame.time.Clock() # Para controlar FPS si es necesario
+    clock = pygame.time.Clock()
+
+    ico_path = create_icon_file()  # Convierte PNG a ICO (si es necesario)
+    if ico_path:
+        try:
+            icon = pygame.image.load(ico_path)
+            pygame.display.set_icon(icon)
+            print("¡Icono personalizado cargado!")
+        except:
+            print("Usando icono por defecto (falló la carga)")
+    # Oculta la barra nativa (opcional, solo Windows)
+    try:
+        import ctypes
+        ctypes.windll.user32.ShowWindow(pygame.display.get_wm_info()["Pokédex"], 6)  # SW_MINIMIZE -> SW_RESTORE
+    except:
+        pass
+    
+    # Variable para el botón de cerrar
+    close_button = None
+    
+    try:
+        font = pygame.font.Font("assets/Pokemon_Solid.ttf", C.FONT_SIZE)  # Ej: "pkmn_rby_font.ttf"
+    except:
+        font = pygame.font.Font(None, C.FONT_SIZE)  # Usa fuente por defecto si hay error
+        print("¡Advertencia! No se encontró la fuente personalizada.")
+
+# Carga el logo (opcional)
+    try:
+        logo = pygame.image.load("assets/pokedex_logo.png").convert_alpha()
+        logo = pygame.transform.scale(logo, (120, 50))
+    except:
+        logo = None
+        screen = pygame.display.set_mode((C.SCREEN_WIDTH, C.SCREEN_HEIGHT))
+        pygame.display.set_caption("Buscador Pokémon y Efectividad de Tipo vRefactored")
+        font = pygame.font.Font(None, C.FONT_SIZE)
+        clock = pygame.time.Clock() # Para controlar FPS si es necesario
+
+    # --- Activar repetición de teclas ---
+    # delay: 350 ms antes de empezar a repetir
+    # interval: 50 ms entre repeticiones
+    pygame.key.set_repeat(350, 50)
+    # -----------------------------------
+
 
     # --- Activar repetición de teclas ---
     # delay: 350 ms antes de empezar a repetir
@@ -174,18 +277,19 @@ def run_app():
                 return # Salir si no hay atacante seleccionado
 
             if processed_types: # Si se encontró como tipo o como nombre de Pokémon
-                 selected_target_types = processed_types # <-- Guardar los tipos del oponente
-                 input_box_to_process.text = text_lower # Actualizar input con texto procesado
-                 input_box_to_process.update_text_surface()
-                 multiplier = game_logic.calculate_effectiveness(selected_pokemon_types, selected_target_types) # <-- Usar selected_target_types
-                 calculated_multiplier = multiplier
-                 calculated_percentage = game_logic.map_multiplier_to_percentage(multiplier)
-                 status_message = f"Efectividad calculada contra {display_name}."
-                 is_status_error = False
+              
+                selected_target_types = processed_types # <-- Guardar los tipos del oponente
+                input_box_to_process.text = text_lower # Actualizar input con texto procesado
+                input_box_to_process.update_text_surface()
+                multiplier = game_logic.calculate_effectiveness(selected_pokemon_types, selected_target_types) # <-- Usar selected_target_types
+                calculated_multiplier = multiplier
+                calculated_percentage = game_logic.map_multiplier_to_percentage(multiplier)
+                status_message = f"Efectividad calculada contra {display_name}."
+                is_status_error = False
 
-                 # Desactivar input y limpiar estado de caja activa
-                 input_box_to_process.active = False
-                 active_input_box = None
+                # Desactivar input y limpiar estado de caja activa
+                input_box_to_process.active = False
+                active_input_box = None
 
             else: # No encontrado como tipo ni como nombre de pokemon
                 status_message = f"Entrada '{text_lower}' no reconocida como Tipo o Pokémon."
@@ -212,6 +316,11 @@ def run_app():
     # --- Bucle Principal ---
     running = True
     while running:
+        #dibujado
+        screen.fill(C.BG_COLOR)
+    
+    # Dibuja la barra personalizada (¡primero para que esté encima!)
+        close_button = draw_custom_title_bar(screen, font)
         # --- Manejo de Eventos ---
         mouse_clicked = False
         for event in pygame.event.get():
@@ -220,6 +329,9 @@ def run_app():
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_clicked = True
+                
+                if close_button and close_button.collidepoint(event.pos):
+                    running = False
                 # Desactivar cajas si se hace clic fuera
                 if not pokemon_input.rect.collidepoint(event.pos):
                     pokemon_input.active = False
@@ -334,7 +446,6 @@ def run_app():
                                 status_message = "Introduce un tipo o nombre de oponente."
                             is_status_error = True
 
-
             # --- Fin del Manejo de Eventos de Teclado ---
 
 
@@ -378,8 +489,8 @@ def run_app():
             )
             # Actualizar mensajes solo si se generó uno nuevo al buscar sugerencias
             if msg:
-                 status_message = msg
-                 is_status_error = err
+                status_message = msg
+                is_status_error = err
 
             # Resetear la otra caja de sugerencias
             current_pokemon_suggestions = []
@@ -397,6 +508,12 @@ def run_app():
 
 
         # --- Dibujado ---
+        # Dibuja el marco rojo exterior
+        pygame.draw.rect(screen, (200, 0, 0), (0, 0, C.SCREEN_WIDTH, C.SCREEN_HEIGHT), 10)
+        # Dibuja el logo (si existe)
+        if logo:
+            screen.blit(logo, (C.SCREEN_WIDTH - 130, 15))
+
         screen.fill(C.BG_COLOR)
 
         # Dibujar Etiquetas
@@ -413,7 +530,8 @@ def run_app():
         # --- Preparar texto de tipos del oponente para la visualización ---
         opponent_display_text = target_input.text # Texto por defecto si no hay tipos seleccionados
         if selected_target_types:
-             opponent_display_text = f"({', '.join(t.capitalize() for t in selected_target_types)})"
+            opponent_display_text = f"({', '.join(t.capitalize() for t in selected_target_types)})"
+
         # -----------------------------------------------------------------
 
         # Pasar la lista de tipos del oponente directamente a la función de dibujo
@@ -426,9 +544,9 @@ def run_app():
         pokemon_suggestion_rects = []
         target_suggestion_rects = []
         if active_input_box == 'pokemon' and current_pokemon_suggestions:
-             pokemon_suggestion_rects = suggestion_ui.draw_suggestions(screen, current_pokemon_suggestions, highlighted_pokemon_suggestion_idx, pokemon_input.rect, font)
+            pokemon_suggestion_rects = suggestion_ui.draw_suggestions(screen, current_pokemon_suggestions, highlighted_pokemon_suggestion_idx, pokemon_input.rect, font)
         elif active_input_box == 'target' and current_target_suggestions:
-             target_suggestion_rects = suggestion_ui.draw_suggestions(screen, current_target_suggestions, highlighted_target_suggestion_idx, target_input.rect, font)
+            target_suggestion_rects = suggestion_ui.draw_suggestions(screen, current_target_suggestions, highlighted_target_suggestion_idx, target_input.rect, font)
 
         # Actualizar Pantalla
         pygame.display.flip()
