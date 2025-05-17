@@ -1,6 +1,5 @@
 # File: ui/drawing.py
 # drawing.py
-"""Funciones auxiliares para dibujar elementos de la UI."""
 
 import pygame
 import constants as C
