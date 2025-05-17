@@ -1,3 +1,4 @@
+# File: Main.py
 # Main.py
 """Punto de entrada principal de la aplicación Pokémon Suggester."""
 
@@ -20,6 +21,13 @@ def run_app():
     font = pygame.font.Font(None, C.FONT_SIZE)
     clock = pygame.time.Clock() # Para controlar FPS si es necesario
 
+    # --- Activar repetición de teclas ---
+    # delay: 350 ms antes de empezar a repetir
+    # interval: 50 ms entre repeticiones
+    pygame.key.set_repeat(350, 50)
+    # -----------------------------------
+
+
     # --- Carga de Datos Iniciales ---
     print("Cargando datos iniciales...")
     all_pokemon_names = pokeapi_client.get_all_pokemon_names()
@@ -31,10 +39,17 @@ def run_app():
 
     # --- Estado de la Aplicación ---
     active_input_box = None # 'pokemon' o 'target' o None
-    pokemon_input = InputBox(C.PADDING, C.PADDING * 2 + C.FONT_SIZE, 300, C.INPUT_BOX_HEIGHT, font)
+    input_width = 300 # Ancho de las cajas de entrada
+    input_height = C.INPUT_BOX_HEIGHT
+    input_y = C.PADDING * 2 + C.FONT_SIZE # Posición vertical común para ambos inputs
+    spacing = C.PADDING * 2 # Espacio entre las cajas
+
+    pokemon_input = InputBox(C.PADDING, input_y, input_width, input_height, font)
     pokemon_input.set_placeholder("Nombre o Tipo Pokémon")
-    target_input = InputBox(C.PADDING, pokemon_input.rect.bottom + C.PADDING * 2 + C.FONT_SIZE, 300, C.INPUT_BOX_HEIGHT, font)
+
+    target_input = InputBox(pokemon_input.rect.right + spacing, input_y, input_width, input_height, font)
     target_input.set_placeholder("Oponente (Tipo o Nombre)")
+
 
     current_pokemon_suggestions = []
     highlighted_pokemon_suggestion_idx = -1
@@ -46,11 +61,153 @@ def run_app():
 
     selected_pokemon_name = ""
     selected_pokemon_types = []
+    selected_target_name = ""
+    selected_target_types = []
     calculated_multiplier = None
     calculated_percentage = None
 
     status_message = ""
     is_status_error = False
+
+    # --- Lógica de Procesamiento Unificada ---
+
+    def process_input_selection(input_text, role):
+        """
+        Procesa la entrada de texto o la selección de sugerencia para un rol dado.
+        Determina si es un tipo o un nombre de Pokémon y actualiza el estado.
+        """
+        nonlocal selected_pokemon_name, selected_pokemon_types, selected_target_types, status_message, is_status_error # <-- Añadir selected_target_types
+        nonlocal calculated_multiplier, calculated_percentage
+        nonlocal current_pokemon_suggestions, highlighted_pokemon_suggestion_idx
+        nonlocal current_target_suggestions, highlighted_target_suggestion_idx
+        nonlocal active_input_box
+
+        text_lower = input_text.lower()
+        input_box_to_process = pokemon_input if role == 'pokemon' else target_input
+
+        status_message = f"Procesando '{text_lower}' para {role}..."
+        is_status_error = False
+        pygame.display.flip() # Mostrar mensaje de procesamiento
+
+        processed_types = None
+        display_name = text_lower # Lo que se usará en el mensaje de éxito/error
+
+        # Intentar como tipo primero
+        if text_lower in data.VALID_TYPES:
+            processed_types = [text_lower]
+            display_name = text_lower.capitalize()
+        else:
+            # Si no es un tipo, intentar como nombre de Pokémon
+            pokemon_types = pokeapi_client.get_pokemon_types(text_lower)
+            if pokemon_types:
+                processed_types = pokemon_types
+                display_name = f"{text_lower.capitalize()} ({', '.join(t.capitalize() for t in pokemon_types)})"
+
+        # --- Actualizar estado basado en el rol y los tipos encontrados ---
+        if role == 'pokemon':
+            # Para el atacante, aceptamos nombres de Pokémon O tipos
+            if processed_types: # Si se encontró como tipo o como nombre de Pokémon
+                if text_lower in all_pokemon_names: # Es un nombre de Pokémon válido
+                    selected_pokemon_name = text_lower
+                    selected_pokemon_types = processed_types # Estos son los tipos del Pokémon
+                    input_box_to_process.text = text_lower # Actualizar caja con el nombre encontrado
+                    input_box_to_process.update_text_surface()
+                    status_message = f"Datos de {display_name} cargados."
+                    is_status_error = False
+                    # Reiniciar cálculo si cambia el atacante
+                    calculated_multiplier = None
+                    calculated_percentage = None
+                    selected_target_types = [] # <-- Limpiar tipos del oponente si cambia el atacante
+
+                    # Desactivar input y limpiar estado de caja activa
+                    input_box_to_process.active = False
+                    active_input_box = None
+
+                elif text_lower in data.VALID_TYPES: # Es un tipo válido, pero no un nombre de Pokémon
+                    selected_pokemon_name = text_lower.capitalize() # Guardar el nombre del tipo como "nombre" para mostrar
+                    selected_pokemon_types = [text_lower] # El tipo es solo el tipo ingresado
+                    input_box_to_process.text = text_lower # Actualizar caja con el nombre del tipo
+                    input_box_to_process.update_text_surface()
+                    status_message = f"Tipo atacante '{display_name}' seleccionado."
+                    is_status_error = False
+                    # Reiniciar cálculo si cambia el atacante (incluso si es solo un tipo)
+                    calculated_multiplier = None
+                    calculated_percentage = None
+                    selected_target_types = [] # <-- Limpiar tipos del oponente si cambia el atacante
+
+                    # Desactivar input y limpiar estado de caja activa
+                    input_box_to_process.active = False
+                    active_input_box = None
+
+                else: # processed_types no es None, pero no es ni nombre ni tipo válido (caso de seguridad)
+                    status_message = f"Entrada '{text_lower}' procesada pero no reconocida como Pokémon o Tipo válido."
+                    is_status_error = True
+                    selected_pokemon_name = ""
+                    selected_pokemon_types = []
+                    calculated_multiplier = None # <-- Resetear si la entrada del atacante es inválida
+                    calculated_percentage = None # <-- Resetear si la entrada del atacante es inválida
+                    selected_target_types = [] # <-- Limpiar tipos del oponente si la entrada del atacante es inválida
+                    # Mantener input activo para permitir corregir
+
+            else: # processed_types es None - no se encontró ni tipo válido ni nombre de Pokémon válido
+                status_message = f"Entrada '{text_lower}' no reconocida como Tipo o Pokémon."
+                is_status_error = True
+                selected_pokemon_name = ""
+                selected_pokemon_types = []
+                calculated_multiplier = None # <-- Resetear si la entrada del atacante es inválida
+                calculated_percentage = None # <-- Resetear si la entrada del atacante es inválida
+                selected_target_types = [] # <-- Limpiar tipos del oponente si la entrada del atacante es inválida
+                # Mantener input activo para permitir corregir
+
+
+        elif role == 'target':
+            if not selected_pokemon_types:
+                status_message = "Selecciona un Pokémon atacante primero."
+                is_status_error = True
+                # No desactivar input
+                # Limpiar sugerencias del target
+                current_target_suggestions = []
+                highlighted_target_suggestion_idx = -1
+                selected_target_types = [] # <-- Asegurarse de limpiar si no hay atacante
+                calculated_multiplier = None # <-- Resetear si no hay atacante
+                calculated_percentage = None # <-- Resetear si no hay atacante
+                return # Salir si no hay atacante seleccionado
+
+            if processed_types: # Si se encontró como tipo o como nombre de Pokémon
+                 selected_target_types = processed_types # <-- Guardar los tipos del oponente
+                 input_box_to_process.text = text_lower # Actualizar input con texto procesado
+                 input_box_to_process.update_text_surface()
+                 multiplier = game_logic.calculate_effectiveness(selected_pokemon_types, selected_target_types) # <-- Usar selected_target_types
+                 calculated_multiplier = multiplier
+                 calculated_percentage = game_logic.map_multiplier_to_percentage(multiplier)
+                 status_message = f"Efectividad calculada contra {display_name}."
+                 is_status_error = False
+
+                 # Desactivar input y limpiar estado de caja activa
+                 input_box_to_process.active = False
+                 active_input_box = None
+
+            else: # No encontrado como tipo ni como nombre de pokemon
+                status_message = f"Entrada '{text_lower}' no reconocida como Tipo o Pokémon."
+                is_status_error = True
+                selected_target_types = [] # <-- Limpiar si no se encontró
+                calculated_multiplier = None
+                calculated_percentage = None
+                # No desactivar input si no se encontró, para permitir corregir
+
+        # Limpiar sugerencias después del procesamiento (éxito o error de no encontrado)
+        # Solo limpiar si la caja fue desactivada, de lo contrario, las sugerencias se actualizarán en el siguiente frame
+        if not input_box_to_process.active:
+            if role == 'pokemon':
+                current_pokemon_suggestions = []
+                highlighted_pokemon_suggestion_idx = -1
+            elif role == 'target':
+                current_target_suggestions = []
+                highlighted_target_suggestion_idx = -1
+
+
+    # --- Fin de la Lógica de Procesamiento Unificada ---
+
 
     # --- Bucle Principal ---
     running = True
@@ -85,85 +242,125 @@ def run_app():
                 pokemon_input.active = False # Desactivar la otra
                 pokemon_input.color = C.INPUT_BORDER_COLOR
 
-            # --- Lógica de Teclado para Sugerencias y Selección ---
+            # --- Lógica de Teclado ---
             if event.type == pygame.KEYDOWN:
+                # --- Lógica para cambiar de input con TAB ---
+                if event.key == pygame.K_TAB:
+                    if active_input_box == 'pokemon':
+                        pokemon_input.active = False
+                        target_input.active = True
+                        active_input_box = 'target'
+                        # Limpiar sugerencias de ambas cajas al cambiar con TAB
+                        current_pokemon_suggestions = []
+                        highlighted_pokemon_suggestion_idx = -1
+                        current_target_suggestions = [] # Limpiar también las del target por si acaso
+                        highlighted_target_suggestion_idx = -1
+                    elif active_input_box == 'target':
+                        target_input.active = False
+                        pokemon_input.active = True
+                        active_input_box = 'pokemon'
+                        # Limpiar sugerencias de ambas cajas al cambiar con TAB
+                        current_pokemon_suggestions = [] # Limpiar también las del pokemon por si acaso
+                        highlighted_pokemon_suggestion_idx = -1
+                        current_target_suggestions = []
+                        highlighted_target_suggestion_idx = -1
+                    else: # Si ninguna está activa, activar la primera (pokemon)
+                        pokemon_input.active = True
+                        active_input_box = 'pokemon'
+                        # Limpiar sugerencias por si acaso
+                        current_pokemon_suggestions = []
+                        highlighted_pokemon_suggestion_idx = -1
+                        current_target_suggestions = []
+                        highlighted_target_suggestion_idx = -1
+
+                    # Consumir el evento TAB para que no sea procesado por la lógica de sugerencias
+                    continue # Salta al siguiente evento
+
+                # --- Lógica de navegación y selección de Sugerencias (solo UP, DOWN, RETURN) ---
+                # Esta lógica se ejecuta SOLO si la tecla presionada NO fue TAB.
                 current_suggestions = []
                 highlighted_idx = -1
                 suggestions_len = 0
+                input_box_to_process = None # Necesitamos saber qué input procesar si se selecciona con Enter
 
                 if active_input_box == 'pokemon':
                     current_suggestions = current_pokemon_suggestions
                     highlighted_idx = highlighted_pokemon_suggestion_idx
                     suggestions_len = len(current_suggestions)
+                    input_box_to_process = pokemon_input
                 elif active_input_box == 'target':
                     current_suggestions = current_target_suggestions
                     highlighted_idx = highlighted_target_suggestion_idx
                     suggestions_len = len(current_suggestions)
+                    input_box_to_process = target_input
+
 
                 if suggestions_len > 0:
                     if event.key == pygame.K_DOWN:
                         highlighted_idx = (highlighted_idx + 1) % suggestions_len
                     elif event.key == pygame.K_UP:
                         highlighted_idx = (highlighted_idx - 1 + suggestions_len) % suggestions_len
-                    elif event.key == pygame.K_RETURN or event.key == pygame.K_TAB: # Tratar TAB como Enter para selección
-                        if highlighted_idx != -1:
+                    # Solo K_RETURN selecciona sugerencia
+                    elif event.key == pygame.K_RETURN:
+                        if highlighted_idx != -1 and active_input_box: # Asegurarse de que haya una sugerencia resaltada y una caja activa
                             selected_suggestion = current_suggestions[highlighted_idx]
-                            # --- Lógica de Selección (Enter/Tab en sugerencia) ---
-                            if active_input_box == 'pokemon':
-                                process_pokemon_selection(selected_suggestion)
-                            elif active_input_box == 'target':
-                                process_target_selection(selected_suggestion)
-                            # Resetear sugerencias después de seleccionar
-                            current_pokemon_suggestions = []
-                            current_target_suggestions = []
-                            highlighted_pokemon_suggestion_idx = -1
-                            highlighted_target_suggestion_idx = -1
+                            # --- Lógica de Selección (Enter en sugerencia) ---
+                            process_input_selection(selected_suggestion, active_input_box)
+                            # process_input_selection handles clearing suggestions and deactivating input/active_input_box
 
-                # Actualizar índice resaltado en el estado global
+                # Actualizar índice resaltado en el estado global (solo si no se seleccionó nada con Enter)
+                # Si se seleccionó, highlighted_idx ya se reseteó a -1 inside process_input_selection.
                 if active_input_box == 'pokemon':
                     highlighted_pokemon_suggestion_idx = highlighted_idx
                 elif active_input_box == 'target':
                     highlighted_target_suggestion_idx = highlighted_idx
 
-            # --- Lógica de Selección con Enter directamente en Input ---
-            if (pokemon_event_result == "enter" and active_input_box == 'pokemon' and not current_pokemon_suggestions) or \
-               (target_event_result == "enter" and active_input_box == 'target' and not current_target_suggestions):
+                # --- Lógica de Selección con Enter directamente en Input (si no hay sugerencias) ---
+                # Esta parte se mantiene igual, ya que maneja Enter cuando NO hay sugerencias.
+                # La lógica de arriba maneja Enter cuando SÍ hay sugerencias.
+                if event.key == pygame.K_RETURN:
+                    if active_input_box and \
+                        ((active_input_box == 'pokemon' and not current_pokemon_suggestions) or \
+                        (active_input_box == 'target' and not current_target_suggestions)):
 
-                if active_input_box == 'pokemon':
-                     if pokemon_input.text:
-                         process_pokemon_selection(pokemon_input.text)
-                     else:
-                          status_message = "Introduce un nombre o tipo de Pokémon."
-                          is_status_error = True
-                elif active_input_box == 'target':
-                     if target_input.text:
-                          process_target_selection(target_input.text)
-                     else:
-                          status_message = "Introduce un tipo o nombre de oponente."
-                          is_status_error = True
+                        input_box_to_process = pokemon_input if active_input_box == 'pokemon' else target_input
+                        if input_box_to_process.text:
+                            process_input_selection(input_box_to_process.text, active_input_box)
+                        else:
+                            # Mensaje de error si el input está vacío al presionar Enter sin sugerencias
+                            if active_input_box == 'pokemon':
+                                status_message = "Introduce un nombre o tipo de Pokémon."
+                            elif active_input_box == 'target':
+                                status_message = "Introduce un tipo o nombre de oponente."
+                            is_status_error = True
 
-        # --- Lógica de Selección por Clic del Ratón en Sugerencias ---
-        if mouse_clicked:
-            if active_input_box == 'pokemon' and current_pokemon_suggestions:
-                for i, rect in enumerate(pokemon_suggestion_rects):
-                    if rect.collidepoint(pygame.mouse.get_pos()):
-                        process_pokemon_selection(current_pokemon_suggestions[i])
-                        break # Procesar solo un clic
-            elif active_input_box == 'target' and current_target_suggestions:
-                for i, rect in enumerate(target_suggestion_rects):
-                    if rect.collidepoint(pygame.mouse.get_pos()):
-                        process_target_selection(current_target_suggestions[i])
-                        break # Procesar solo un clic
+
+            # --- Fin del Manejo de Eventos de Teclado ---
+
+
+            # --- Lógica de Selección por Clic del Ratón en Sugerencias ---
+            if mouse_clicked:
+                if active_input_box == 'pokemon' and current_pokemon_suggestions:
+                    for i, rect in enumerate(pokemon_suggestion_rects):
+                        if rect.collidepoint(pygame.mouse.get_pos()):
+                            process_input_selection(current_pokemon_suggestions[i], 'pokemon')
+                            break # Procesar solo un clic
+                elif active_input_box == 'target' and current_target_suggestions:
+                    for i, rect in enumerate(target_suggestion_rects):
+                        if rect.collidepoint(pygame.mouse.get_pos()):
+                            process_input_selection(current_target_suggestions[i], 'target')
+                            break # Procesar solo un clic
 
         # --- Actualización de Sugerencias (basado en la caja activa) ---
+        # Usamos la misma función de sugerencias para ambos inputs
         if active_input_box == 'pokemon':
             current_pokemon_suggestions, msg, err = suggestion_ui.update_pokemon_suggestions(
                 pokemon_input.text, all_pokemon_names, data.VALID_TYPES
             )
             # Actualizar mensajes solo si se generó uno nuevo al buscar sugerencias
             if msg:
-                 status_message = msg
-                 is_status_error = err
+                status_message = msg
+                is_status_error = err
 
             # Resetear la otra caja de sugerencias
             current_target_suggestions = []
@@ -171,119 +368,30 @@ def run_app():
 
             # Resetear índice si las sugerencias cambian o desaparecen
             if not current_pokemon_suggestions or highlighted_pokemon_suggestion_idx >= len(current_pokemon_suggestions):
-                 highlighted_pokemon_suggestion_idx = -1
+                highlighted_pokemon_suggestion_idx = -1
 
 
         elif active_input_box == 'target':
-            current_target_suggestions = suggestion_ui.update_type_suggestions(
-                target_input.text, data.VALID_TYPES
+            # Usar la misma función de sugerencias que para el pokemon input
+            current_target_suggestions, msg, err = suggestion_ui.update_pokemon_suggestions(
+                target_input.text, all_pokemon_names, data.VALID_TYPES
             )
+            # Actualizar mensajes solo si se generó uno nuevo al buscar sugerencias
+            if msg:
+                 status_message = msg
+                 is_status_error = err
+
             # Resetear la otra caja de sugerencias
             current_pokemon_suggestions = []
             highlighted_pokemon_suggestion_idx = -1
 
             # Resetear índice si las sugerencias cambian o desaparecen
             if not current_target_suggestions or highlighted_target_suggestion_idx >= len(current_target_suggestions):
-                 highlighted_target_suggestion_idx = -1
+                highlighted_target_suggestion_idx = -1
 
         else: # Ninguna caja activa
             current_pokemon_suggestions = []
             highlighted_pokemon_suggestion_idx = -1
-            current_target_suggestions = []
-            highlighted_target_suggestion_idx = -1
-
-
-        # --- Lógica de Procesamiento (llamada desde eventos) ---
-        def process_pokemon_selection(name_or_type):
-            """Intenta obtener datos del Pokémon y actualiza el estado."""
-            nonlocal selected_pokemon_name, selected_pokemon_types, status_message, is_status_error
-            nonlocal calculated_multiplier, calculated_percentage, current_pokemon_suggestions, highlighted_pokemon_suggestion_idx
-
-            name_lower = name_or_type.lower()
-            status_message = f"Buscando {name_lower}..."
-            is_status_error = False
-            pygame.display.flip() # Mostrar mensaje de búsqueda
-
-            types = pokeapi_client.get_pokemon_types(name_lower)
-            if types:
-                selected_pokemon_name = name_lower
-                selected_pokemon_types = types
-                pokemon_input.text = name_lower # Actualizar caja con el nombre encontrado
-                pokemon_input.update_text_surface()
-                status_message = f"Datos de {name_lower.capitalize()} cargados."
-                is_status_error = False
-                # Reiniciar cálculo si cambia el atacante
-                calculated_multiplier = None
-                calculated_percentage = None
-            else:
-                # Podría ser un tipo válido en lugar de un nombre no encontrado
-                if name_lower in data.VALID_TYPES:
-                     status_message = f"'{name_lower.capitalize()}' es un tipo. Introduce un nombre de Pokémon."
-                     is_status_error = True
-                else:
-                     status_message = f"Pokémon '{name_lower}' no encontrado."
-                     is_status_error = True
-                selected_pokemon_name = ""
-                selected_pokemon_types = []
-
-            # Limpiar sugerencias después de la selección
-            current_pokemon_suggestions = []
-            highlighted_pokemon_suggestion_idx = -1
-
-
-        def process_target_selection(type_or_name):
-            """Intenta obtener tipos del oponente y calcula efectividad."""
-            nonlocal status_message, is_status_error, calculated_multiplier, calculated_percentage
-            nonlocal current_target_suggestions, highlighted_target_suggestion_idx
-
-            target_lower = type_or_name.lower()
-
-            if not selected_pokemon_types:
-                status_message = "Selecciona un Pokémon atacante primero."
-                is_status_error = True
-                return
-
-            status_message = f"Procesando oponente '{target_lower}'..."
-            is_status_error = False
-            pygame.display.flip()
-
-            opponent_types = None
-            opponent_display_name = target_lower # Lo que se usará en el mensaje de éxito/error
-
-            # ¿Es un tipo conocido?
-            if target_lower in data.VALID_TYPES:
-                opponent_types = [target_lower]
-            else:
-                # Si no es un tipo, intenta buscarlo como Pokémon
-                opponent_types = pokeapi_client.get_pokemon_types(target_lower)
-                if opponent_types:
-                     opponent_display_name = f"{target_lower.capitalize()} ({', '.join(t.capitalize() for t in opponent_types)})"
-                else:
-                    status_message = f"Entrada '{target_lower}' no reconocida como Tipo o Pokémon."
-                    is_status_error = True
-                    calculated_multiplier = None
-                    calculated_percentage = None
-                    # Limpiar sugerencias después del intento
-                    current_target_suggestions = []
-                    highlighted_target_suggestion_idx = -1
-                    return # Salir si no se encontró nada
-
-            # Si tenemos tipos de oponente (ya sea directo o de un Pokémon)
-            if opponent_types:
-                 target_input.text = target_lower # Actualizar input con texto procesado
-                 target_input.update_text_surface()
-                 multiplier = game_logic.calculate_effectiveness(selected_pokemon_types, opponent_types)
-                 calculated_multiplier = multiplier
-                 calculated_percentage = game_logic.map_multiplier_to_percentage(multiplier)
-                 status_message = f"Efectividad calculada contra {opponent_display_name}."
-                 is_status_error = False
-            else: # Seguridad, no debería llegar aquí si la lógica anterior es correcta
-                 status_message = "Error inesperado al procesar oponente."
-                 is_status_error = True
-                 calculated_multiplier = None
-                 calculated_percentage = None
-
-            # Limpiar sugerencias después de la selección/procesamiento
             current_target_suggestions = []
             highlighted_target_suggestion_idx = -1
 
@@ -301,7 +409,15 @@ def run_app():
         # Dibujar Info Pokémon y Resultados
         info_start_y = target_input.rect.bottom + C.PADDING
         next_y = ui_draw.draw_pokemon_info(screen, font, info_start_y, selected_pokemon_name, selected_pokemon_types)
-        next_y = ui_draw.draw_effectiveness_results(screen, font, next_y, calculated_multiplier, calculated_percentage, selected_pokemon_types, target_input.text)
+
+        # --- Preparar texto de tipos del oponente para la visualización ---
+        opponent_display_text = target_input.text # Texto por defecto si no hay tipos seleccionados
+        if selected_target_types:
+             opponent_display_text = f"({', '.join(t.capitalize() for t in selected_target_types)})"
+        # -----------------------------------------------------------------
+
+        # Pasar la lista de tipos del oponente directamente a la función de dibujo
+        next_y = ui_draw.draw_effectiveness_results(screen, font, next_y, calculated_multiplier, calculated_percentage, selected_pokemon_types, selected_target_types)
 
         # Dibujar Mensajes de Estado
         ui_draw.draw_status_message(screen, font, status_message, is_status_error)
